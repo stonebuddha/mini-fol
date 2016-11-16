@@ -44,7 +44,7 @@ let e tac = refine (by tac)
 
 let set_goal (hyps, concl) =
   the_goal_stack :=
-    [mk_goal_state (List.map (fun hyp -> _INCL hyps hyp) hyps, concl)];
+    [mk_goal_state (List.map (fun hyp -> _ASSUME hyp) hyps, concl)];
   !the_goal_stack
 
 let g hyps concl = set_goal (hyps, concl)
@@ -69,15 +69,9 @@ let _EXACT_TAC n ((hyp_thms, concl) : goal) : goal_state =
   else
     let the_hyp_thm = List.nth hyp_thms n in
     if get_concl the_hyp_thm = concl then
-      ([], fun [] -> the_hyp_thm)
+      ([], fun [] -> _INCL (List.map get_concl hyp_thms) concl)
     else
       failwith "EXACT_TAC"
-
-let _ASSUMPTION_TAC ((hyp_thms, concl) : goal) : goal_state =
-  try
-    let the_hyp_thm = List.find (fun hyp_thm -> get_concl hyp_thm = concl) hyp_thms in
-    ([], fun [] -> the_hyp_thm)
-  with Not_found -> failwith "ASSUMPTION_TAC"
 
 let _SPLIT_CONJ_TAC ((hyp_thms, concl) : goal) : goal_state =
   try
@@ -91,26 +85,26 @@ let _DESTRUCT_CONJ_TAC n ((hyp_thms, concl) : goal) : goal_state =
   else
     try
       let the_hyp_thm = List.nth hyp_thms n in
-      let elim_thms = [_CONJ_ELIM_LEFT the_hyp_thm; _CONJ_ELIM_RIGHT the_hyp_thm] in
-      ([(elim_thms @ (List.remove hyp_thms the_hyp_thm), concl)], fun [thm] -> thm)
+      let the_left_thm = _CONJ_ELIM_LEFT the_hyp_thm in
+      let the_right_thm = _CONJ_ELIM_RIGHT the_hyp_thm in
+      ([(the_left_thm :: the_right_thm :: (List.remove hyp_thms the_hyp_thm), concl)], fun [thm] -> _TRANS [the_left_thm; the_right_thm] thm)
     with Failure _ -> failwith "DESTRUCT_CONJ_TAC"
 
-(* let _DESTRUCT_DISJ_TAC n ((hyp_thms, concl) : goal) : goal_state = *)
-(*   if List.length hyp_thms <= n then *)
-(*     failwith "DESTRUCT_DISJ_TAC" *)
-(*   else *)
-(*     try *)
-(*       let the_hyp_thm = List.nth hyp_thms n in *)
-(*       let the_hyps = get_hyps the_hyp_thm in *)
-(*       let the_concl = get_concl the_hyp_thm in *)
-(*       let (the_inl, the_inr) = dest_fm_disj the_concl in *)
-(*       let hyp_thms' = List.remove hyp_thms the_hyp_thm in *)
-(*       let the_inl_thm = _INCL (the_inl :: the_hyps) the_inl in *)
-(*       let the_inl_goal = (the_inl_thm :: List.map (_ADD_PREM the_inl) hyp_thms', concl) in *)
-(*       let the_inr_thm = _INCL (the_inr :: the_hyps) the_inr in *)
-(*       let the_inr_goal = (the_inr_thm :: List.map (_ADD_PREM the_inr) hyp_thms', concl) in *)
-(*       ([the_inl_goal; the_inr_goal], fun [inl_thm; inr_thm] -> _DISJ_ELIM the_inl the_inr inl_thm inr_thm) *)
-(*     with Failure _ -> failwith "DESTRUCT_DISJ_TAC" *)
+let _DESTRUCT_DISJ_TAC n ((hyp_thms, concl) : goal) : goal_state =
+  if List.length hyp_thms <= n then
+    failwith "DESTRUCT_DISJ_TAC"
+  else
+    try
+      let the_hyp_thm = List.nth hyp_thms n in
+      let the_concl = get_concl the_hyp_thm in
+      let (the_inl_fm, the_inr_fm) = dest_fm_disj the_concl in
+      let hyp_thms' = List.remove hyp_thms the_hyp_thm in
+      let the_inl_thm = _ASSUME the_inl_fm in
+      let the_inl_goal = (the_inl_thm :: hyp_thms', concl) in
+      let the_inr_thm = _ASSUME the_inr_fm in
+      let the_inr_goal = (the_inr_thm :: hyp_thms', concl) in
+      ([the_inl_goal; the_inr_goal], fun [inl_thm; inr_thm] -> _DISJ_ELIM the_inl_fm the_inr_fm inl_thm inr_thm)
+    with Failure _ -> failwith "DESTRUCT_DISJ_TAC"
 
 let _INL_DISJ_TAC ((hyp_thms, concl) : goal) : goal_state =
   try

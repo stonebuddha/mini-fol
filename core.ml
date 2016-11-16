@@ -63,7 +63,7 @@ sig
   val dest_fm_forall : formula -> string * formula
   val dest_fm_exists : formula -> string * formula
 
-  val _INCL : formula list -> formula -> thm
+  val _ASSUME : formula -> thm
   val _NOT_ELIM : formula -> thm -> thm -> thm
   val _IMPLY_ELIM : thm -> thm -> thm
   val _IMPLY_INTRO : formula -> thm -> thm
@@ -76,7 +76,6 @@ sig
   val _IFF_ELIM_LEFT : thm -> thm -> thm
   val _IFF_ELIM_RIGHT : thm -> thm -> thm
   val _IFF_INTRO : thm -> thm -> thm
-  val _ADD_PREM : formula -> thm -> thm
   val _FORALL_ELIM : term -> thm -> thm
   val _FORALL_INTRO : string -> thm -> thm
   val _EXISTS_ELIM : string -> formula -> thm -> thm
@@ -291,28 +290,21 @@ struct
     in
     inner s
 
-  let _INCL hyps concl =
-    if List.mem concl hyps then
-      Theorem (List.sort compare hyps, concl)
-    else
-      failwith "INCL"
+  let _ASSUME concl = Theorem ([concl], concl)
 
   let _NOT_ELIM dis (Theorem (hyps1, concl1)) (Theorem (hyps2, concl2)) =
     if mk_fm_not concl1 = concl2 && List.mem (mk_fm_not dis) hyps1 && List.mem (mk_fm_not dis) hyps2 then
       let hyps1' = List.remove hyps1 (mk_fm_not dis) in
       let hyps2' = List.remove hyps2 (mk_fm_not dis) in
-      if hyps1' = hyps2' then
-        Theorem (hyps1', dis)
-      else
-        failwith "NOT_ELIM"
+      Theorem (List.sort_uniq compare (hyps1' @ hyps2'), dis)
     else
       failwith "NOT_ELIM"
 
   let _IMPLY_ELIM (Theorem (hyps1, concl1)) (Theorem (hyps2, concl2)) =
     try
       let (fm11, fm12) = dest_fm_imply concl1 in
-      if fm11 = concl2 && hyps1 = hyps2 then
-        Theorem (hyps1, fm12)
+      if fm11 = concl2 then
+        Theorem (List.sort_uniq compare (hyps1 @ hyps2), fm12)
       else
         failwith "IMPLY_ELIM"
     with Failure _ -> failwith "IMPLY_ELIM"
@@ -328,10 +320,7 @@ struct
     if concl1 = concl2 && List.mem inl hyps1 && List.mem inr hyps2 then
       let hyps1' = List.remove hyps1 inl in
       let hyps2' = List.remove hyps2 inr in
-      if hyps1' = hyps2' then
-        Theorem (List.merge compare hyps1' [mk_fm_disj (inl, inr)], concl1)
-      else
-        failwith "DISJ_ELIM"
+      Theorem (List.sort_uniq compare (hyps1' @ hyps2' @ [mk_fm_disj (inl, inr)]), concl1)
     else
       failwith "DISJ_ELIM"
 
@@ -352,16 +341,13 @@ struct
     with Failure _ -> failwith "CONJ_ELIM_RIGHT"
 
   let _CONJ_INTRO (Theorem (hyps1, concl1)) (Theorem (hyps2, concl2)) =
-    if hyps1 = hyps2 then
-      Theorem (hyps1, mk_fm_conj (concl1, concl2))
-    else
-      failwith "CONJ_INTRO"
+    Theorem (List.sort_uniq compare (hyps1 @ hyps2), mk_fm_conj (concl1, concl2))
 
   let _IFF_ELIM_LEFT (Theorem (hyps1, concl1)) (Theorem (hyps2, concl2)) =
     try
       let (tm11, tm12) = dest_fm_iff concl1 in
-      if tm11 = concl2 && hyps1 = hyps2 then
-        Theorem (hyps1, tm12)
+      if tm11 = concl2 then
+        Theorem (List.sort_uniq compare (hyps1 @ hyps2), tm12)
       else
         failwith "IFF_ELIM_LEFT"
     with Failure _ -> failwith "IFF_ELIM_LEFT"
@@ -369,8 +355,8 @@ struct
   let _IFF_ELIM_RIGHT (Theorem (hyps1, concl1)) (Theorem (hyps2, concl2)) =
     try
       let (tm11, tm12) = dest_fm_iff concl1 in
-      if tm12 = concl2 && hyps1 = hyps2 then
-        Theorem (hyps1, tm11)
+      if tm12 = concl2 then
+        Theorem (List.sort_uniq compare (hyps1 @ hyps2), tm11)
       else
         failwith "IFF_ELIM_RIGHT"
     with Failure _ -> failwith "IFF_ELIM_RIGHT"
@@ -379,14 +365,9 @@ struct
     if List.mem concl2 hyps1 && List.mem concl1 hyps2 then
       let hyps1' = List.remove hyps1 concl2 in
       let hyps2' = List.remove hyps2 concl1 in
-      if hyps1' = hyps2' then
-        Theorem (hyps1', mk_fm_iff (concl2, concl1))
-      else
-        failwith "IFF_INTRO"
+        Theorem (List.sort_uniq compare (hyps1' @ hyps2'), mk_fm_iff (concl2, concl1))
     else
       failwith "IFF_INTRO"
-
-  let _ADD_PREM prem (Theorem (hyps, concl)) = Theorem (List.merge compare hyps [prem], concl)
 
   let _FORALL_ELIM tm (Theorem (hyps, concl)) =
     try
@@ -404,7 +385,7 @@ struct
     if List.mem fm hyps then
       let hyps' = List.remove hyps fm in
       if not (List.exists (is_var_free_in_fm x) (concl :: hyps')) then
-        Theorem (List.merge compare hyps' [mk_fm_exists (x, fm)], concl)
+        Theorem (List.sort_uniq compare (hyps' @ [mk_fm_exists (x, fm)]), concl)
       else
         failwith "EXISTS_ELIM"
     else
@@ -420,3 +401,22 @@ struct
 end
 
 include First_order_logic
+
+let _ADD_PREM prem thm =
+  let prem_thm = _ASSUME prem in
+  let conj_thm = _CONJ_INTRO thm prem_thm in
+  _CONJ_ELIM_LEFT conj_thm
+
+let _ADD_PREMS prems thm =
+  List.fold_right _ADD_PREM prems thm
+
+let _INCL hyps concl =
+  if List.mem concl hyps then
+    _ADD_PREMS hyps (_ASSUME concl)
+  else
+    failwith "INCL"
+
+let _TRANS prem_thms then_thm =
+  let thm1 = List.fold_right (fun thm then_thm -> _IMPLY_INTRO (get_concl thm) then_thm) prem_thms then_thm in
+  let thm2 = List.fold_left (fun then_thm thm -> _IMPLY_ELIM then_thm thm) thm1 prem_thms in
+  thm2
