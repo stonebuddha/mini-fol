@@ -1,4 +1,5 @@
 open Core
+open Tactics
 
 let string_of_conn c =
   match c with
@@ -37,6 +38,19 @@ let string_of_thm thm =
   let (hyps, concl) = (get_hyps thm, get_concl thm) in
   (BatString.join ", " (List.map string_of_formula hyps)) ^ " |- " ^ string_of_formula concl
 
+let string_of_goal_stack gstack =
+  match gstack with
+  | [] -> "no current goal"
+  | (gls, _) :: _ ->
+    let n = List.length gls in
+    if n = 0 then "no subgoals"
+    else
+      (if n = 1 then "1 subgoal" else string_of_int n ^ " subgoals") ^ "\n" ^
+      (let (hyp_thms, concl) = List.hd gls in
+       (BatString.join "\n" (List.mapi (fun i thm -> "  " ^ string_of_int i ^ " " ^ "`" ^ string_of_formula (get_concl thm) ^ "`") hyp_thms)) ^ "\n\n  " ^ "`" ^ string_of_formula concl ^ "`")
+
 let print_formula ppf fm = Format.fprintf ppf "`%s`" (string_of_formula fm)
 
 let print_thm ppf thm = Format.fprintf ppf "%s" (string_of_thm thm)
+
+let print_goal_stack ppf gstack = Format.fprintf ppf "%s" (string_of_goal_stack gstack)

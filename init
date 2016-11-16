@@ -1,4 +1,6 @@
 open Core;;
+open Tactics;;
 
 #install_printer Printer.print_formula;;
 #install_printer Printer.print_thm;;
+#install_printer Printer.print_goal_stack;;
