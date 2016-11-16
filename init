@@ -1,0 +1,4 @@
+open Core;;
+
+#install_printer Printer.print_formula;;
+#install_printer Printer.print_thm;;
