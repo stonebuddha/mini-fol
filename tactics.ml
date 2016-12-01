@@ -1,5 +1,6 @@
 open Batteries
 open Core
+open Printer
 
 type goal = thm list * formula
 
@@ -117,3 +118,24 @@ let _INR_DISJ_TAC ((hyp_thms, concl) : goal) : goal_state =
     let (inl_fm, inr_fm) = dest_fm_disj concl in
     ([(hyp_thms, inr_fm)], fun [thm] -> _DISJ_INTRO_INR inl_fm thm)
   with Failure _ -> failwith "INR_DISJ_TAC"
+
+let _SPEC_FORALL_TAC n tm ((hyp_thms, concl) : goal) : goal_state =
+  if List.length hyp_thms <= n then
+    failwith "SPEC_FORALL_TAC"
+  else
+    try
+      let the_hyp_thm = List.nth hyp_thms n in
+      let the_thm = _FORALL_ELIM tm the_hyp_thm in
+      ([(the_thm :: (List.remove hyp_thms the_hyp_thm), concl)], fun [thm] -> thm)
+    with Failure _ -> failwith "SPEC_FORALL_TAC"
+
+let _SPEC_IMPLY_TAC n1 n2 ((hyp_thms, concl) : goal) : goal_state =
+  if List.length hyp_thms <= max n1 n2 then
+    failwith "SPEC_IMPLY_TAC"
+  else
+    try
+      let the_hyp_thm1 = List.nth hyp_thms n1 in
+      let the_hyp_thm2 = List.nth hyp_thms n2 in
+      let the_thm = _IMPLY_ELIM the_hyp_thm1 the_hyp_thm2 in
+      ([(the_thm :: (List.remove hyp_thms the_hyp_thm1), concl)], fun [thm] -> _TRANS [the_thm] thm)
+    with Failure _ -> failwith "SPEC_IMPLY_TAC"
